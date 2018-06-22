@@ -341,7 +341,8 @@ def plot(time_lim=(0., 140.), y_lim=None, x_initial=None, y_initial=None,
 
     ax2 = plt.subplot2grid((7, 1), (6, 0), rowspan=1)
     ax2.set_xlim(time_lim)
-    ax2.errorbar(x_rsd, y_rsd, color='k', ms=2, fmt='o', mfc='white', capsize=0)
+    ax2.errorbar(x_rsd, y_rsd, color='k', ms=2, fmt='o', mfc='white',
+                 capsize=0)
     ax2.set_xlabel('Time (ns)')
     ax2.axhline(0., color='k')
 
@@ -447,7 +448,7 @@ def write_log(logfilen='conuss_log.txt', command='fit', verbose=False,
     elif command == 'search':
         param_str = []
         param_str.append(
-            "[Warning] This version does not log thickness changes for search.")
+            "[Warning] This version does not log thickness change for search.")
         param_str.append("** Initial values **")
         p_str_i = get_initial_parameters()
         param_str += p_str_i
@@ -480,7 +481,7 @@ def write_log(logfilen='conuss_log.txt', command='fit', verbose=False,
         f.write('\n')
 
 
-def make_infile(line_to_change, new_value, step):
+def make_infile(line_to_change, new_value, step, lineno=1):
     """
     Internal function to make an input file with a new value and a new step
     """
@@ -491,24 +492,31 @@ def make_infile(line_to_change, new_value, step):
     print('=================================================================')
     print('Ranged line: ', new_line)
     print('=================================================================')
+    line_count = 0
     with fileinput.input(input_filen, inplace=True) as f:
         for line in f:
             if line.find("::<-") != -1:
-                print(new_line.lstrip().rstrip())
+                line_count += 1
+                if line_count == lineno:
+                    print(new_line.lstrip().rstrip())
+                else:
+                    print(line.lstrip().rstrip())
             else:
                 print(line.lstrip().rstrip())
 
 
 def get_line_to_range():
     """
-    Internal function to get line information noted by `::<-` in the input file.
+    Internal function to get line information noted by `::<-`
+    in the input file.
     """
     input_filen = get_input_file()
+    lines = []
     with open(input_filen+'.org', "r") as f:
         for l in f:
             if l.find('::<-') != -1:
-                return ' '.join(l.split())
-    return None
+                lines.append(' '.join(l.split()))
+    return lines
 
 
 def search_range(v_0, v_f, n_pnts):
@@ -526,15 +534,15 @@ def search_range(v_0, v_f, n_pnts):
     """
     input_filen = get_input_file()
     shutil.copy2(input_filen, input_filen+'.org')
-    line_to_range = get_line_to_range()
+    line_to_range = get_line_to_range()[0]
     # print('Line for ranging is: ', line_to_range)
-    if line_to_range is None:
+    if len(line_to_range) == 0:
         print('[Error] No line to range search')
         return
     step = (np.abs(v_f - v_0) / (n_pnts - 1.)) / 2.
 
     insert_lines_log([" ",
-                      "=======================================================",
+                      "======================================================",
                       "***Range Search begins***",
                       line_to_range,
                       "start = {0:.7e}, end = {1:.7e}, step = {2:.7e}, n_pnts = {3:.0f}".
@@ -552,6 +560,66 @@ def search_range(v_0, v_f, n_pnts):
     insert_lines_log([" ", "***Range Search ends***", line_to_range,
                       "start = {0:.7e}, end = {1:.7e}, step = {2:.7e}, n_pnts = {3:.0f}".
                       format(v_0, v_f, step, n_pnts),
-                      "=======================================================", " "])
+                      "======================================================",
+                      " "])
+
+    return
+
+
+def search_grid(param1, param2):
+    """
+    Conduct search for a range of values for one parameter noted by
+    `::<-` in the input file.
+    For example, to try from 360. to 0. for `theta1` variable,
+    1. Open your input and go to the line for theta1 and then
+    `% @ theta1 := 10. 5.` to `% @ theta1 := 10. 5. ::<-`
+    2. Run `search_range(360., 0., 30)`
+
+    param1, param2 = [v_0, v_f, n_pnts]
+    v_0 = starting values
+    v_f = stop values
+    n_pnts = number of points
+    """
+    input_filen = get_input_file()
+    shutil.copy2(input_filen, input_filen+'.org')
+    line_to_range = get_line_to_range()
+    # print('Line for ranging is: ', line_to_range)
+    if len(line_to_range) != 2:
+        print('[Error] There should be two lines for grid.')
+        return
+
+    step1 = (np.abs(param1[1] - param1[0]) / (param1[2] - 1.)) / 2.
+    step2 = (np.abs(param2[1] - param2[0]) / (param2[2] - 1.)) / 2.
+
+    insert_lines_log([" ",
+                      "======================================================",
+                      "***Grid Search begins***",
+                      line_to_range[0],
+                      "start = {0:.7e}, end = {1:.7e}, step = {2:.7e}, n_pnts = {3:.0f}".
+                      format(param1[0], param1[1], step1*2., param1[2]),
+                      line_to_range[1],
+                      "start = {0:.7e}, end = {1:.7e}, step = {2:.7e}, n_pnts = {3:.0f}".
+                      format(param2[0], param2[1], step2*2., param2[2]), " "
+                      ])
+
+    i = 1
+    for v1 in np.linspace(param1[0], param1[1], param1[2]):
+        for v2 in np.linspace(param2[0], param2[1], param2[2]):
+            make_infile(line_to_range[0], v1, step1)
+            make_infile(line_to_range[1], v2, step2, lineno=2)
+            text = line_to_range[0] + line_to_range[1] + \
+                '\n at {0:.7e} {1:.7e} \n at {2:.7e} {3:.7e} \n {4:.0f} out of {5:.0f} iteration'.\
+                format(v1, step1, v2, step2, i, param1[2]*param2[2])
+            search(alarm=False, plot_result=False, line_to_range=text)
+            i += 1
+
+    insert_lines_log([" ", "***Grid Search ends***", line_to_range[0],
+                      "start = {0:.7e}, end = {1:.7e}, step = {2:.7e}, n_pnts = {3:.0f}".
+                      format(param1[0], param1[1], step1*2., param1[2]),
+                      line_to_range[1],
+                      "start = {0:.7e}, end = {1:.7e}, step = {2:.7e}, n_pnts = {3:.0f}".
+                      format(param2[0], param2[1], step2*2., param2[2]),
+                      "======================================================",
+                      " "])
 
     return
