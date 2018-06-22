@@ -1,3 +1,36 @@
+Purpose
+=======
+
+Assist CONUSS fitting.  This works only for CONUSS ver. 2.0.2.
+
+How to structure your directory
+===============================
+```
+My_Project -- ds_conuss202.py
+           |
+           -- 15GPa -- Data_file.dat10, Input_in, In_*, ...
+           |
+           |
+           -- 20GPa
+           ...
+```
+
+How to start
+============
+
+0. Run ipython where you have `ds_conuss202.py`.
+
+1. Run
+   ```python
+   from ds_conuss202 import *
+   ```
+
+2. Move to the subdirectory where you have data.
+
+How to setup input files
+========================
+
+0. In `in_kfit`, change `exp. data file`.
 
 1. In `in_kref`, change `material data input file`.
 
