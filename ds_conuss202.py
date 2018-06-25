@@ -15,8 +15,18 @@ import time
 import datetime
 import fileinput
 
+ifile_for_datafile = 'in_kfit'
+ifile_for_inputfile = 'in_kref'
+ofile_for_fitresult = 'out_kctl'
+ofile_for_mcoresult = 'out_kmco'
+command_mco = 'conuss mco'
+command_guess = 'conuss rmfx'
+command_fit = 'conuss fit tmp'
+backup_folder = 'backups'
+log_file = os.path.join(backup_folder, 'conuss_log.txt')
 
-def get_datafile_name(where_to_find='in_kfit'):
+
+def get_datafile_name(where_to_find=ifile_for_datafile):
     """
     Internal function to obtain datafile name from in_kfit
     This looks for the following line in in_kfit
@@ -24,11 +34,12 @@ def get_datafile_name(where_to_find='in_kfit'):
     """
     with open(where_to_find, "r") as f:
         for l in f:
-            result = l.find('exp. data file')
-            if result != -1:
-                words = l.split('::')
-                input_filen = ((words[1].lstrip()).split(" "))[0]
-                return input_filen
+            if l[0] != '*':
+                result = l.find('exp. data file')
+                if result != -1:
+                    words = l.split('::')
+                    input_filen = ((words[1].lstrip()).split(" "))[0]
+                    return input_filen
     return None
 
 
@@ -63,17 +74,17 @@ def read_mask():
     return mask_str
 
 
-def get_input_file(where_to_find='in_kref'):
+def get_input_file(where_to_find=ifile_for_inputfile):
     """
     Internal function input file name from in_kref
     """
     with open(where_to_find, "r") as f:
         for l in f:
-            result = l.find('material data input file')
-            if result != -1:
-                words = l.split('::')
-                input_filen = (words[1].replace(" ", "")).rstrip()
-                return input_filen
+            if l[0] != '*':
+                if l.find('material data input file') != -1:
+                    words = l.split('::')
+                    input_filen = (words[1].replace(" ", "")).rstrip()
+                    return input_filen
     return None
 
 
@@ -112,7 +123,7 @@ def get_fit_parameters():
     """
     Internal function to print fitting results
     """
-    output_filen = 'out_kctl'
+    output_filen = ofile_for_fitresult
     read_on = False
     param_str = []
     with open(output_filen, "r") as f:
@@ -133,7 +144,7 @@ def get_chisq_kctl():
     """
     Obtain chisq from kctl
     """
-    output_filen = 'out_kctl'
+    output_filen = ofile_for_fitresult
     read_on = False
     with open(output_filen, "r") as f:
         for l in f:
@@ -150,7 +161,7 @@ def get_chisq_kmco():
     """
     Obtain chisq from kmco
     """
-    output_filen = 'out_kmco'
+    output_filen = ofile_for_mcoresult
     read_on = False
     with open(output_filen, "r") as f:
         for l in f:
@@ -245,7 +256,7 @@ def guess(plot_data=True):
     """
     Generate calculated spectrum for a given set of parameters
     """
-    os.system('conuss rmfx')
+    os.system(command_guess)
     plot(plot_data=plot_data)
 
 
@@ -258,7 +269,9 @@ def search(alarm=True, plot_result=True, print_result=True, log=True,
     plot_result = plot search result at the end
     print_result = print search result at the end
     """
-    os.system('conuss mco')
+    if line_to_range is None:
+        backup_input_before_search()
+    os.system(command_mco)
     if alarm:
         os.system('say "It is finished."')
     print('==============================================')
@@ -279,10 +292,10 @@ def fit(alarm=True, print_result=True, plot_result=True, log=True):
     plot_result = plot search result at the end
     print_result = print search result at the end
     """
-    os.system('conuss rmfx')
+    os.system(command_guess)
     x_initial, y_initial = readfit()
     # Conduct fit
-    os.system('conuss fit tmp')
+    os.system(command_fit)
     if alarm:
         os.system('say "It is finished."')
     print('==============================================')
@@ -378,7 +391,7 @@ def plot_search(show_plot=True):
     """
     Plot the research results
     """
-    os.system('conuss rmfx')
+    os.system(command_guess)
     x_initial, y_initial = readfit()
     # print result
     print_mco_parameters()
@@ -387,27 +400,33 @@ def plot_search(show_plot=True):
     os.rename(InFileName, InFileName+'.bak')
     # calculate for the best in mco file
     shutil.copy2(InFileName+'.mco', InFileName)
-    os.system('conuss rmfx')
+    os.system(command_guess)
     plot(x_initial=x_initial, y_initial=y_initial, show_plot=show_plot)
     # put back the original input file
     os.remove(InFileName)
     os.rename(InFileName+'.bak', InFileName)
 
 
-def insert_lines_log(lines, logfilen='conuss_log.txt'):
+def backup_input_before_search():
+    """
+    Make backup of input file before search, search_range, research_grid
+    """
+    InFileName = get_input_file()
+    shutil.copy2(InFileName, InFileName+'_search.bak')
+
+
+def insert_lines_log(lines, log_filen=log_file):
     """
     lines need to be a list of strings but without \n
     """
-    backup_folder_name = "backups"
-    if not os.path.isdir(backup_folder_name):
-        os.makedirs(backup_folder_name)
-    logfile = os.path.join(backup_folder_name, logfilen)
-    with open(logfile, 'a+') as f:
+    if not os.path.isdir(backup_folder):
+        os.makedirs(backup_folder)
+    with open(log_filen, 'a+') as f:
         for l in lines:
             f.write(l+'\n')
 
 
-def write_log(logfilen='conuss_log.txt', command='fit', verbose=False,
+def write_log(log_filen=log_file, command='fit', verbose=False,
               line_to_range=None):
     """
     Internal function to write log
@@ -430,16 +449,14 @@ def write_log(logfilen='conuss_log.txt', command='fit', verbose=False,
         for m in mask_str:
             print(m+'\n')
     # check if backups directory exist
-    backup_folder_name = "backups"
-    if not os.path.isdir(backup_folder_name):
-        os.makedirs(backup_folder_name)
-    logfile = os.path.join(backup_folder_name, logfilen)
+    if not os.path.isdir(backup_folder):
+        os.makedirs(backup_folder)
     # get time
     timestamp = datetime.datetime.now()
     timestamp_name = time.strftime("%Y%m%d_%H%M%S")
     fig_filen = time.strftime("%Y%m%d_%H%M%S")+'.pdf'
-    bak_folder = os.path.join(backup_folder_name, timestamp_name)
-    fig_file = os.path.join(backup_folder_name, fig_filen)
+    bak_folder = os.path.join(backup_folder, timestamp_name)
+    fig_file = os.path.join(backup_folder, fig_filen)
     if verbose:
         print('Backup directory: ', bak_folder)
     # get varied parameters and fit result
@@ -465,7 +482,7 @@ def write_log(logfilen='conuss_log.txt', command='fit', verbose=False,
     shutil.copy2('fit_result.pdf', fig_file)
     # append new information to log
     # if os.path.isfile(logfilen):
-    with open(logfile, 'a+') as f:
+    with open(log_filen, 'a+') as f:
         f.write('********************************************\n')
         f.write(command+' executed at: ' + str(timestamp)+'\n')
         if line_to_range is not None:
@@ -514,7 +531,7 @@ def get_line_to_range():
     lines = []
     with open(input_filen+'.org', "r") as f:
         for l in f:
-            if l.find('::<-') != -1:
+            if l[0] != '*' and l.find('::<-') != -1:
                 lines.append(' '.join(l.split()))
     return lines
 
@@ -540,7 +557,7 @@ def search_range(v_0, v_f, n_pnts):
         print('[Error] No line to range search')
         return
     step = (np.abs(v_f - v_0) / (n_pnts - 1.)) / 2.
-
+    backup_input_before_search()
     insert_lines_log([" ",
                       "======================================================",
                       "***Range Search begins***",
@@ -587,7 +604,7 @@ def search_grid(param1, param2):
     if len(line_to_range) != 2:
         print('[Error] There should be two lines for grid.')
         return
-
+    backup_input_before_search()
     step1 = (np.abs(param1[1] - param1[0]) / (param1[2] - 1.)) / 2.
     step2 = (np.abs(param2[1] - param2[0]) / (param2[2] - 1.)) / 2.
 
@@ -623,3 +640,89 @@ def search_grid(param1, param2):
                       " "])
 
     return
+
+
+def find_min_chisq(log_filen=log_file):
+    """
+    Find and print minimum chi value from a give log file
+    """
+    chisq_np = get_chisq_log(log_filen)
+    print("Minimum chisq in "+log_filen+" = ", chisq_np.min())
+
+
+def get_chisq_log(log_filen=log_file):
+    """
+    Obtain chisq from conuss_log
+    """
+    with open(log_filen, "r") as f:
+        chisq = []
+        for l in f:
+            if l.find('Chisq') != -1:
+                v_str = (l.lstrip().rstrip().split('='))[1]
+                if v_str.find("******") == -1:
+                    chisq.append(float(v_str))
+                else:
+                    chisq.append(1000.)
+    chisq_np = np.asarray(chisq)
+    return chisq_np
+
+
+def get_param_log(param_str, log_filen=log_file):
+    """
+    Obtain parameters from conuss_log
+    """
+    with open(log_filen, "r") as f:
+        values = []
+        read_on = False
+        for l in f:
+            if l.find("Initial values") != -1:
+                read_on = False
+            if l.find("Final values") != -1:
+                read_on = True
+            if read_on and l.find(param_str) != -1:
+                v_str = (l.lstrip().rstrip().split(':='))[1]
+                values.append(float(v_str))
+            if l.find("Figure saved") != -1:
+                read_on = False
+    values_np = np.asarray(values)
+    chisq = get_chisq_log(log_filen=log_filen)
+    return values_np, chisq
+
+
+def plot_progress(param_str=None, log_filen=log_file):
+    """
+    Plot progress during serch, search_range, and search_grid
+
+    param_str = parameter to search for
+    logfilename = ['backups/conuss_log.txt'] log file name
+    x_seq = [False] plot time sequence of chi
+    """
+    if param_str is None:
+        chisq = get_chisq_log(log_filen=log_filen)
+        plt.plot(chisq, 'bo-')
+        plt.xlabel('Process number')
+    else:
+        v, chisq = get_param_log(param_str, log_filen=log_filen)
+        if len(v) == 0:
+            print('[Error] ' + param_str + ' was not found in the log file.')
+            plt.plot(chisq, 'bo-')
+            plt.xlabel('Process number')
+        else:
+            plt.plot(v, chisq, 'bo-')
+            plt.xlabel(param_str)
+    plt.ylabel('Chisq')
+    plt.show()
+
+
+def plot_chisq(n1=0, n2=0, log_filen=log_file):
+    """
+    Get chisq sequence
+    """
+    chisq = get_chisq_log(log_filen=log_filen)
+    plt.plot(chisq, 'bo-')
+    if n1 != 0 and n2 != 0:
+        plt.xticks([i for i in range(0, n1*n2, n2-1)])
+        plt.grid(True)
+    plt.ylabel('Chisq')
+    plt.xlabel('Process number')
+    plt.show()
