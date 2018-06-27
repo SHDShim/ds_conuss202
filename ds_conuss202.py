@@ -385,6 +385,8 @@ def plot(time_lim=(0., 140.), y_lim=None, x_initial=None, y_initial=None,
     plt.savefig('fit_result.pdf')
     if show_plot:
         plt.show()
+    else:
+        plt.close(f)
 
 
 def plot_search(show_plot=True):
