@@ -683,7 +683,7 @@ def get_param_log(param_str, log_filen=log_file):
                 read_on = True
             if read_on and l.find(param_str) != -1:
                 v_str = (l.lstrip().rstrip().split(':='))[1]
-                values.append(float(v_str))
+                values.append(float(v_str.replace('D', 'E')))
             if l.find("Figure saved") != -1:
                 read_on = False
     values_np = np.asarray(values)
@@ -725,6 +725,7 @@ def plot_chisq(n1=0, n2=0, log_filen=log_file):
     if n1 != 0 and n2 != 0:
         plt.xticks([i for i in range(0, n1*n2, n2-1)])
         plt.grid(True)
+        plt.xlim(0, n1*n2)
     plt.ylabel('Chisq')
     plt.xlabel('Process number')
     plt.show()
