@@ -551,6 +551,9 @@ def search_range(v_0, v_f, n_pnts):
     v_f = stop values
     n_pnts = number of points
     """
+    if not os.path.isdir(backup_folder):
+        print('[Error] Rename the existing backups folder.')
+        return
     input_filen = get_input_file()
     shutil.copy2(input_filen, input_filen+'.org')
     line_to_range = get_line_to_range()[0]
@@ -599,6 +602,9 @@ def search_grid(param1, param2):
     v_f = stop values
     n_pnts = number of points
     """
+    if not os.path.isdir(backup_folder):
+        print('[Error] Rename the existing backups folder.')
+        return
     input_filen = get_input_file()
     shutil.copy2(input_filen, input_filen+'.org')
     line_to_range = get_line_to_range()
@@ -650,6 +656,36 @@ def find_min_chisq(log_filen=log_file):
     """
     chisq_np = get_chisq_log(log_filen)
     print("Minimum chisq in "+log_filen+" = ", chisq_np.min())
+    pdf_filen = print_min_chisq_result(chisq_np.min(), log_filen=log_filen)
+    if pdf_filen is None:
+        print('[Error] No min chisq record was found.')
+        return None
+    return pdf_filen
+
+
+def print_min_chisq_result(chisq_min, log_filen=log_file):
+    """
+    Get parameters from min chisq run
+    """
+    chisq_min_run = False
+    final_values = False
+    i = 0
+    with open(log_filen, "r") as f:
+        for l in f:
+            if final_values and chisq_min_run:
+                if l.find('Figure saved as:') != -1:
+                    print(l.rstrip())
+                    return l.rstrip().split(':')[1]
+                else:
+                    print(l.rstrip())
+            if chisq_min_run and (not final_values):
+                if l.find('** Final values **') != -1:
+                    final_values = True
+            if l.find(str(chisq_min).lstrip().rstrip()) != -1:
+                chisq_min_run = True
+                print('Line num for min chisq: ', i)
+            i += 1
+    return None
 
 
 def get_chisq_log(log_filen=log_file):
@@ -691,7 +727,7 @@ def get_param_log(param_str, log_filen=log_file):
     return values_np, chisq
 
 
-def plot_progress(param_str=None, log_filen=log_file):
+def plot_progress(param_str=None, log_filen=log_file, open_spectrum=True):
     """
     Plot progress during serch, search_range, and search_grid
 
@@ -699,10 +735,18 @@ def plot_progress(param_str=None, log_filen=log_file):
     logfilename = ['backups/conuss_log.txt'] log file name
     x_seq = [False] plot time sequence of chi
     """
+    pdf_filen = find_min_chisq(log_filen=log_filen)
+    if open_spectrum:
+        os.system("open "+pdf_filen)
     if param_str is None:
-        chisq = get_chisq_log(log_filen=log_filen)
-        plt.plot(chisq, 'bo-')
-        plt.xlabel('Process number')
+        if is_search_grid(log_filen=log_filen):
+            n1, n2 = get_search_grid_dim(log_filen=log_filen)
+            print('You are running a grid search for: ', str(n1), 'x', str(n2))
+            plot_chisq(n1=n1, n2=n2, log_filen=log_filen)
+        else:
+            n1 = get_search_range_dim(log_filen=log_filen)
+            print('You are running a range search for: ', str(n1))
+            plot_chisq(n1=n1, n2=0, log_filen=log_filen)
     else:
         v, chisq = get_param_log(param_str, log_filen=log_filen)
         if len(v) == 0:
@@ -718,7 +762,7 @@ def plot_progress(param_str=None, log_filen=log_file):
 
 def plot_chisq(n1=0, n2=0, log_filen=log_file):
     """
-    Get chisq sequence
+    Now internal function Get chisq sequence
     """
     chisq = get_chisq_log(log_filen=log_filen)
     plt.plot(chisq, 'bo-')
@@ -726,6 +770,50 @@ def plot_chisq(n1=0, n2=0, log_filen=log_file):
         plt.xticks([i for i in range(0, n1*n2, n2-1)])
         plt.grid(True)
         plt.xlim(0, n1*n2)
+    elif n1 != 0 and n2 == 0:
+        plt.xlim(0, n1)
     plt.ylabel('Chisq')
     plt.xlabel('Process number')
-    plt.show()
+
+
+def is_search_grid(log_filen=log_file):
+    with open(log_filen, "r") as f:
+        for l in f:
+            if l.find("***Grid Search begins***") != -1:
+                return True
+    return False
+
+
+def is_search_range(log_filen=log_file):
+    with open(log_filen, "r") as f:
+        for l in f:
+            if l.find("***Range Search begins***") != -1:
+                return True
+    return False
+
+
+def get_search_range_dim(log_filen=log_file):
+    search_on = False
+    with open(log_filen, "r") as f:
+        for l in f:
+            if search_on and l.find("n_pnts =") != -1:
+                return int(l[l.find("n_pnts ="):-1])
+            if l.find("***Range Search begins***") != -1:
+                search_on = True
+    return 0
+
+
+def get_search_grid_dim(log_filen=log_file):
+    search_on = False
+    n1 = 0
+    n2 = 0
+    with open(log_filen, "r") as f:
+        for l in f:
+            if search_on and l.find("n_pnts =") != -1 and n1 == 0:
+                n1 = int(l[l.find("n_pnts =")+9:-1])
+            if search_on and l.find("n_pnts =") != -1 and n1 != 0:
+                n2 = int(l[l.find("n_pnts =")+9:-1])
+                return n1, n2
+            if l.find("***Grid Search begins***") != -1:
+                search_on = True
+    return 0, 0
