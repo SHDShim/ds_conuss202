@@ -252,63 +252,6 @@ def readdata():
     return x, y, errorbar, xfit, yfit
 
 
-def guess(plot_data=True):
-    """
-    Generate calculated spectrum for a given set of parameters
-    """
-    os.system(command_guess)
-    plot(plot_data=plot_data)
-
-
-def search(alarm=True, plot_result=True, print_result=True, log=True,
-           line_to_range=None):
-    """
-    Conduct Monte-Carlo search for the parameteral space given by a user
-
-    alarm = setup alarm at the finished
-    plot_result = plot search result at the end
-    print_result = print search result at the end
-    """
-    if line_to_range is None:
-        backup_input_before_search()
-    os.system(command_mco)
-    if alarm:
-        os.system('say "It is finished."')
-    print('==============================================')
-    print('==========CONUSS MCO SEARCH FINISHED==========')
-    print('==============================================')
-    if print_result:
-        print_mco_parameters()
-    plot_search(show_plot=plot_result)
-    if log:
-        write_log(command='search', line_to_range=line_to_range)
-
-
-def fit(alarm=True, print_result=True, plot_result=True, log=True):
-    """
-    Calculate Mossbauer spectrum for given parameters
-
-    alarm = setup alarm at the finished
-    plot_result = plot search result at the end
-    print_result = print search result at the end
-    """
-    os.system(command_guess)
-    x_initial, y_initial = readfit()
-    # Conduct fit
-    os.system(command_fit)
-    if alarm:
-        os.system('say "It is finished."')
-    print('==============================================')
-    print('==============CONUSS FIT FINISHED=============')
-    print('==============================================')
-    if print_result:
-        print_fit_parameters()
-    if plot_result:
-        plot(x_initial=x_initial, y_initial=y_initial)
-    if log:
-        write_log(command='fit')
-
-
 def normlogspecfile(cxp='data_graph.cxp', fit='data_graph.fit'):
     """
     Internal function, currently unused
@@ -538,134 +481,22 @@ def get_line_to_range():
     return lines
 
 
-def search_range(v_0, v_f, n_pnts):
-    """
-    Conduct search for a range of values for one parameter noted by
-    `::<-` in the input file.
-    For example, to try from 360. to 0. for `theta1` variable,
-    1. Open your input and go to the line for theta1 and then
-    `% @ theta1 := 10. 5.` to `% @ theta1 := 10. 5. ::<-`
-    2. Run `search_range(360., 0., 30)`
-
-    v_0 = starting values
-    v_f = stop values
-    n_pnts = number of points
-    """
-    if not os.path.isdir(backup_folder):
-        print('[Error] Rename the existing backups folder.')
-        return
-    input_filen = get_input_file()
-    shutil.copy2(input_filen, input_filen+'.org')
-    line_to_range = get_line_to_range()[0]
-    # print('Line for ranging is: ', line_to_range)
-    if len(line_to_range) == 0:
-        print('[Error] No line to range search')
-        return
-    step = (np.abs(v_f - v_0) / (n_pnts - 1.)) / 2.
-    backup_input_before_search()
-    insert_lines_log([" ",
-                      "======================================================",
-                      "***Range Search begins***",
-                      line_to_range,
-                      "start = {0:.7e}, end = {1:.7e}, step = {2:.7e}, n_pnts = {3:.0f}".
-                      format(v_0, v_f, step*2., n_pnts), " "])
-
-    i = 1
-    for v in np.linspace(v_0, v_f, n_pnts):
-        make_infile(line_to_range, v, step)
-        text = line_to_range + \
-            '\n at {0:.7e} {1:.7e} \n {2:.0f} out of {3:.0f} iteration'.\
-            format(v, step, i, n_pnts)
-        search(alarm=False, plot_result=False, line_to_range=text)
-        i += 1
-
-    insert_lines_log([" ", "***Range Search ends***", line_to_range,
-                      "start = {0:.7e}, end = {1:.7e}, step = {2:.7e}, n_pnts = {3:.0f}".
-                      format(v_0, v_f, step, n_pnts),
-                      "======================================================",
-                      " "])
-
-    return
-
-
-def search_grid(param1, param2):
-    """
-    Conduct search for a range of values for one parameter noted by
-    `::<-` in the input file.
-    For example, to try from 360. to 0. for `theta1` variable,
-    1. Open your input and go to the line for theta1 and then
-    `% @ theta1 := 10. 5.` to `% @ theta1 := 10. 5. ::<-`
-    2. Run `search_range(360., 0., 30)`
-
-    param1, param2 = [v_0, v_f, n_pnts]
-    v_0 = starting values
-    v_f = stop values
-    n_pnts = number of points
-    """
-    if not os.path.isdir(backup_folder):
-        print('[Error] Rename the existing backups folder.')
-        return
-    input_filen = get_input_file()
-    shutil.copy2(input_filen, input_filen+'.org')
-    line_to_range = get_line_to_range()
-    # print('Line for ranging is: ', line_to_range)
-    if len(line_to_range) != 2:
-        print('[Error] There should be two lines for grid.')
-        return
-    backup_input_before_search()
-    step1 = (np.abs(param1[1] - param1[0]) / (param1[2] - 1.)) / 2.
-    step2 = (np.abs(param2[1] - param2[0]) / (param2[2] - 1.)) / 2.
-
-    insert_lines_log([" ",
-                      "======================================================",
-                      "***Grid Search begins***",
-                      line_to_range[0],
-                      "start = {0:.7e}, end = {1:.7e}, step = {2:.7e}, n_pnts = {3:.0f}".
-                      format(param1[0], param1[1], step1*2., param1[2]),
-                      line_to_range[1],
-                      "start = {0:.7e}, end = {1:.7e}, step = {2:.7e}, n_pnts = {3:.0f}".
-                      format(param2[0], param2[1], step2*2., param2[2]), " "
-                      ])
-
-    i = 1
-    for v1 in np.linspace(param1[0], param1[1], param1[2]):
-        for v2 in np.linspace(param2[0], param2[1], param2[2]):
-            make_infile(line_to_range[0], v1, step1)
-            make_infile(line_to_range[1], v2, step2, lineno=2)
-            text = line_to_range[0] + line_to_range[1] + \
-                '\n at {0:.7e} {1:.7e} \n at {2:.7e} {3:.7e} \n {4:.0f} out of {5:.0f} iteration'.\
-                format(v1, step1, v2, step2, i, param1[2]*param2[2])
-            search(alarm=False, plot_result=False, line_to_range=text)
-            i += 1
-
-    insert_lines_log([" ", "***Grid Search ends***", line_to_range[0],
-                      "start = {0:.7e}, end = {1:.7e}, step = {2:.7e}, n_pnts = {3:.0f}".
-                      format(param1[0], param1[1], step1*2., param1[2]),
-                      line_to_range[1],
-                      "start = {0:.7e}, end = {1:.7e}, step = {2:.7e}, n_pnts = {3:.0f}".
-                      format(param2[0], param2[1], step2*2., param2[2]),
-                      "======================================================",
-                      " "])
-
-    return
-
-
 def find_min_chisq(log_filen=log_file):
     """
     Find and print minimum chi value from a give log file
     """
     chisq_np = get_chisq_log(log_filen)
     print("Minimum chisq in "+log_filen+" = ", chisq_np.min())
-    pdf_filen = print_min_chisq_result(chisq_np.min(), log_filen=log_filen)
+    pdf_filen = print_result_log(chisq_np.min(), log_filen=log_filen)
     if pdf_filen is None:
         print('[Error] No min chisq record was found.')
         return None
     return pdf_filen
 
 
-def print_min_chisq_result(chisq_min, log_filen=log_file):
+def print_result_log(chisq_str, log_filen=log_file):
     """
-    Get parameters from min chisq run
+    Get parameters from chisq
     """
     chisq_min_run = False
     final_values = False
@@ -681,9 +512,9 @@ def print_min_chisq_result(chisq_min, log_filen=log_file):
             if chisq_min_run and (not final_values):
                 if l.find('** Final values **') != -1:
                     final_values = True
-            if l.find(str(chisq_min).lstrip().rstrip()) != -1:
+            if l.find(str(chisq_str).lstrip().rstrip()) != -1:
                 chisq_min_run = True
-                print('Line num for min chisq: ', i)
+                print('Line num for the chisq: ', i)
             i += 1
     return None
 
@@ -725,39 +556,6 @@ def get_param_log(param_str, log_filen=log_file):
     values_np = np.asarray(values)
     chisq = get_chisq_log(log_filen=log_filen)
     return values_np, chisq
-
-
-def plot_progress(param_str=None, log_filen=log_file, open_spectrum=True):
-    """
-    Plot progress during serch, search_range, and search_grid
-
-    param_str = parameter to search for
-    logfilename = ['backups/conuss_log.txt'] log file name
-    x_seq = [False] plot time sequence of chi
-    """
-    pdf_filen = find_min_chisq(log_filen=log_filen)
-    if open_spectrum:
-        os.system("open "+pdf_filen)
-    if param_str is None:
-        if is_search_grid(log_filen=log_filen):
-            n1, n2 = get_search_grid_dim(log_filen=log_filen)
-            print('You are running a grid search for: ', str(n1), 'x', str(n2))
-            plot_chisq(n1=n1, n2=n2, log_filen=log_filen)
-        else:
-            n1 = get_search_range_dim(log_filen=log_filen)
-            print('You are running a range search for: ', str(n1))
-            plot_chisq(n1=n1, n2=0, log_filen=log_filen)
-    else:
-        v, chisq = get_param_log(param_str, log_filen=log_filen)
-        if len(v) == 0:
-            print('[Error] ' + param_str + ' was not found in the log file.')
-            plt.plot(chisq, 'bo-')
-            plt.xlabel('Process number')
-        else:
-            plt.plot(v, chisq, 'bo-')
-            plt.xlabel(param_str)
-    plt.ylabel('Chisq')
-    plt.show()
 
 
 def plot_chisq(n1=0, n2=0, log_filen=log_file):
@@ -817,3 +615,261 @@ def get_search_grid_dim(log_filen=log_file):
             if l.find("***Grid Search begins***") != -1:
                 search_on = True
     return 0, 0
+
+
+#=============================================================================
+
+def sort_figs(log_filen=log_file):
+    """
+    Make copies of spectrum figure pdf in `sorted_pdfs` folder with chisq in
+    the beginning of the filename for quick sorted view
+
+    :param log_filen: [log_file] log file name
+    :returns None:
+    """
+    # make folder
+    os.mkdir(os.path.join(backup_folder, 'sorted_pdfs'))
+    switch_on = False
+
+    with open(log_filen, "r") as f:
+        for l in f:
+            if l.find('Chisq =') != -1:
+                switch_on = True
+                chisq_str = ((l.rstrip().split("=")[1]).split(".")[0]).rstrip().lstrip().zfill(4)
+            if switch_on:
+                if l.find('Figure saved as:') != -1:
+                    pdf_filen = l.rstrip().split(':')[1].rstrip().lstrip()
+                    switch_on = False
+                    shutil.copy2(pdf_filen,
+                                 os.path.join(backup_folder, 'sorted_pdfs',
+                                              chisq_str+"_" +
+                                              os.path.basename(pdf_filen)))
+    return None
+
+
+def find_result(n_chisq=0, log_filen=log_file):
+    """
+    Find result by chisq ranking
+
+    :param n_chisq: [0] index for chisq rank, e.x., 0 = min, -1 = max
+    :param log_filen: [log_file] log file name and path
+    :returns None:
+    """
+    chisq_np = get_chisq_log(log_filen=log_filen)
+    chisq_sorted = np.sort(chisq_np)
+    print("Chisq searched in "+log_filen+" = ", chisq_sorted[n_chisq])
+    pdf_filen = print_result_log(chisq_sorted[n_chisq], log_filen=log_filen)
+    if pdf_filen is None:
+        print('[Error] No min chisq record was found.')
+        return None
+    else:
+        os.system("open "+pdf_filen)
+
+
+def search(alarm=True, plot_result=True, print_result=True, log=True,
+           line_to_range=None):
+    """
+    Conduct Monte-Carlo search
+
+    :param alarm: [True] setup alarm at the finished
+    :param plot_result: [True] plot search result at the end
+    :param print_result: [True] print search result at the end
+    :param log: [True] save result in log file
+    :param line_to_range: [None] input for ranging.  Not for external use.
+    :returns None:
+    """
+    if line_to_range is None:
+        backup_input_before_search()
+    os.system(command_mco)
+    if alarm:
+        os.system('say "It is finished."')
+    print('==============================================')
+    print('==========CONUSS MCO SEARCH FINISHED==========')
+    print('==============================================')
+    if print_result:
+        print_mco_parameters()
+    plot_search(show_plot=plot_result)
+    if log:
+        write_log(command='search', line_to_range=line_to_range)
+
+
+def fit(alarm=True, print_result=True, plot_result=True, log=True):
+    """
+    Conduct fitting of Mossbauer spectrum
+
+    :param alarm: [True] setup alarm to voice announce finish
+    :param print_result: [True] print result at the end
+    :param plot_result: [True] plot result at the end
+    :param log: [True] save result in log file
+    :returns None:
+    """
+    os.system(command_guess)
+    x_initial, y_initial = readfit()
+    # Conduct fit
+    os.system(command_fit)
+    if alarm:
+        os.system('say "It is finished."')
+    print('==============================================')
+    print('==============CONUSS FIT FINISHED=============')
+    print('==============================================')
+    if print_result:
+        print_fit_parameters()
+    if plot_result:
+        plot(x_initial=x_initial, y_initial=y_initial)
+    if log:
+        write_log(command='fit')
+
+
+def plot_progress(param_str=None, log_filen=log_file, open_spectrum=True):
+    """
+    Plot progress during serch, search_range, and search_grid
+
+    :param param_str: [None] parameter to search for
+    :param log_filen: ['backups/conuss_log.txt'] log file name
+    :param open_spectrum: [True] open a pdf file of spectrum at min chisq
+    """
+    pdf_filen = find_min_chisq(log_filen=log_filen)
+    if open_spectrum:
+        os.system("open "+pdf_filen)
+    if param_str is None:
+        if is_search_grid(log_filen=log_filen):
+            n1, n2 = get_search_grid_dim(log_filen=log_filen)
+            print('You are running a grid search for: ', str(n1), 'x', str(n2))
+            plot_chisq(n1=n1, n2=n2, log_filen=log_filen)
+        else:
+            n1 = get_search_range_dim(log_filen=log_filen)
+            print('You are running a range search for: ', str(n1))
+            plot_chisq(n1=n1, n2=0, log_filen=log_filen)
+    else:
+        v, chisq = get_param_log(param_str, log_filen=log_filen)
+        if len(v) == 0:
+            print('[Error] ' + param_str + ' was not found in the log file.')
+            plt.plot(chisq, 'bo-')
+            plt.xlabel('Process number')
+        else:
+            plt.plot(v, chisq, 'bo-')
+            plt.xlabel(param_str)
+    plt.ylabel('Chisq')
+    plt.show()
+
+
+def search_range(v_0, v_f, n_pnts):
+    """
+    Conduct search for a range of values for one parameter noted by
+    `::<-` in the input file.
+    For example, to try from 360. to 0. for `theta1` variable,
+    1. Open your input and go to the line for theta1 and then
+    `% @ theta1 := 10. 5.` to `% @ theta1 := 10. 5. ::<-`
+    2. Run `search_range(360., 0., 30)`
+
+    :param v_0: starting values
+    :param v_f: stop values
+    :param n_pnts: number of points
+    :returns None:
+    """
+    if not os.path.isdir(backup_folder):
+        print('[Error] Rename the existing backups folder.')
+        return
+    input_filen = get_input_file()
+    shutil.copy2(input_filen, input_filen+'.org')
+    line_to_range = get_line_to_range()[0]
+    # print('Line for ranging is: ', line_to_range)
+    if len(line_to_range) == 0:
+        print('[Error] No line to range search')
+        return
+    step = (np.abs(v_f - v_0) / (n_pnts - 1.)) / 2.
+    backup_input_before_search()
+    insert_lines_log([" ",
+                      "======================================================",
+                      "***Range Search begins***",
+                      line_to_range,
+                      "start = {0:.7e}, end = {1:.7e}, step = {2:.7e}, n_pnts = {3:.0f}".
+                      format(v_0, v_f, step*2., n_pnts), " "])
+
+    i = 1
+    for v in np.linspace(v_0, v_f, n_pnts):
+        make_infile(line_to_range, v, step)
+        text = line_to_range + \
+            '\n at {0:.7e} {1:.7e} \n {2:.0f} out of {3:.0f} iteration'.\
+            format(v, step, i, n_pnts)
+        search(alarm=False, plot_result=False, line_to_range=text)
+        i += 1
+
+    insert_lines_log([" ", "***Range Search ends***", line_to_range,
+                      "start = {0:.7e}, end = {1:.7e}, step = {2:.7e}, n_pnts = {3:.0f}".
+                      format(v_0, v_f, step, n_pnts),
+                      "======================================================",
+                      " "])
+
+    return
+
+
+def search_grid(param1, param2):
+    """
+    Conduct search for a range of values for one parameter noted by
+    `::<-` in the input file.
+    For example, to try from 360. to 0. for `theta1` variable,
+    1. Open your input and go to the line for theta1 and then
+    `% @ theta1 := 10. 5.` to `% @ theta1 := 10. 5. ::<-`
+    2. Run `search_range(360., 0., 30)`
+
+    :param param1, param2: a list of [start value, end value, num points]
+    :returns None:
+    """
+    if not os.path.isdir(backup_folder):
+        print('[Error] Rename the existing backups folder.')
+        return
+    input_filen = get_input_file()
+    shutil.copy2(input_filen, input_filen+'.org')
+    line_to_range = get_line_to_range()
+    # print('Line for ranging is: ', line_to_range)
+    if len(line_to_range) != 2:
+        print('[Error] There should be two lines for grid.')
+        return
+    backup_input_before_search()
+    step1 = (np.abs(param1[1] - param1[0]) / (param1[2] - 1.)) / 2.
+    step2 = (np.abs(param2[1] - param2[0]) / (param2[2] - 1.)) / 2.
+
+    insert_lines_log([" ",
+                      "======================================================",
+                      "***Grid Search begins***",
+                      line_to_range[0],
+                      "start = {0:.7e}, end = {1:.7e}, step = {2:.7e}, n_pnts = {3:.0f}".
+                      format(param1[0], param1[1], step1*2., param1[2]),
+                      line_to_range[1],
+                      "start = {0:.7e}, end = {1:.7e}, step = {2:.7e}, n_pnts = {3:.0f}".
+                      format(param2[0], param2[1], step2*2., param2[2]), " "
+                      ])
+
+    i = 1
+    for v1 in np.linspace(param1[0], param1[1], param1[2]):
+        for v2 in np.linspace(param2[0], param2[1], param2[2]):
+            make_infile(line_to_range[0], v1, step1)
+            make_infile(line_to_range[1], v2, step2, lineno=2)
+            text = line_to_range[0] + line_to_range[1] + \
+                '\n at {0:.7e} {1:.7e} \n at {2:.7e} {3:.7e} \n {4:.0f} out of {5:.0f} iteration'.\
+                format(v1, step1, v2, step2, i, param1[2]*param2[2])
+            search(alarm=False, plot_result=False, line_to_range=text)
+            i += 1
+
+    insert_lines_log([" ", "***Grid Search ends***", line_to_range[0],
+                      "start = {0:.7e}, end = {1:.7e}, step = {2:.7e}, n_pnts = {3:.0f}".
+                      format(param1[0], param1[1], step1*2., param1[2]),
+                      line_to_range[1],
+                      "start = {0:.7e}, end = {1:.7e}, step = {2:.7e}, n_pnts = {3:.0f}".
+                      format(param2[0], param2[1], step2*2., param2[2]),
+                      "======================================================",
+                      " "])
+
+    return
+
+
+def guess(plot_data=True):
+    """
+    Generate calculated spectrum for a given input file
+
+    :param plot_data: [True]
+    :returns None:
+    """
+    os.system(command_guess)
+    plot(plot_data=plot_data)
